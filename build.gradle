@@ -1,6 +1,6 @@
 plugins {
-    id 'java'
-    id 'application'
+  id 'java'
+  id 'application'
 }
 
 group 'com.lgajowy'
@@ -9,23 +9,23 @@ version '1.0-SNAPSHOT'
 sourceCompatibility = 1.8
 
 repositories {
-    mavenCentral()
+  mavenCentral()
 }
 
 application {
-    mainClassName = 'com.lgajowy.airquality.AvgAirQuality'
+  mainClassName = 'com.lgajowy.airquality.AvgAirQuality'
 }
 
 dependencies {
-    compile group: 'org.apache.beam', name: 'beam-sdks-java-core', version: '2.12.0'
-    compile group: 'org.apache.beam', name: 'beam-sdks-java-io-google-cloud-platform', version: '2.12.0'
-    compile group: 'org.apache.beam', name: 'beam-runners-direct-java', version: '2.12.0'
-    compile group: 'org.apache.beam', name: 'beam-runners-flink_2.11', version: '2.12.0'
+  compile group: 'org.apache.beam', name: 'beam-sdks-java-core', version: '2.12.0'
+  compile group: 'org.apache.beam', name: 'beam-sdks-java-io-google-cloud-platform', version: '2.12.0'
+  compile group: 'org.apache.beam', name: 'beam-runners-direct-java', version: '2.12.0'
+  compile group: 'org.apache.beam', name: 'beam-runners-flink_2.11', version: '2.12.0'
 
-    compile group: 'org.apache.beam', name: 'beam-runners-google-cloud-dataflow-java', version: '2.12.0'
-    
-    // TODO: Spark doesn't work due to dependency mismatch!
-    //  (guava from spark streaming is 14, we require 15 at least here?)
+  compile group: 'org.apache.beam', name: 'beam-runners-google-cloud-dataflow-java', version: '2.12.0'
+
+  // TODO: Spark doesn't work due to dependency mismatch!
+  // (guava from spark streaming is 14, we require 15 at least here?)
 //    compile group: 'org.apache.beam', name: 'beam-runners-spark', version: '2.12.0'
 //    compile group: 'org.apache.spark', name: 'spark-core_2.11', version: '2.4.0'
 //    compile group: 'org.apache.spark', name: 'spark-streaming_2.11', version: '2.4.0'

@@ -1,10 +1,10 @@
 # Generates samples for air-quality aplication and publishes them in a pub/sub topic
 # (that's what sensors would do if I actualy had them).
 #
-# NOTE: The script requires to setup a service account first. Otherwise returns 403 error. See:
-# https://cloud.google.com/pubsub/docs/reference/libraries#client-libraries-install-python
-#
-import time, random, json
+# Please run " gcloud auth application-default login" first to have access to your PubSub resources
+# or use a dedicated Service Account.
+
+import time, random
 
 from google.cloud import pubsub_v1
 
@@ -14,7 +14,7 @@ topic_name = "air-quality"
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_name)
 
-cities = ["WARSAW", "KRAKOW", "KATOWICE", "WROCLAW"]
+cities = ["WARSAW"]
 
 
 def callback(message_future):
@@ -26,16 +26,13 @@ def callback(message_future):
         print(message_future.result())
 
 while True:
-    data = {
-        "timestamp": time.time(),
-        "city": random.choice(cities),
-        "pm25": random.randint(0, 200)
-    }
-    payload = json.dumps(data).encode('utf-8')
+    # Message payload format: <city>,<pm25level>
+    data = u'{},{}'.format(random.choice(cities), random.randint(0, 200)).encode('utf-8')
+    timestamp = str(int(time.time() * 1000))
 
-    print (payload)
+    print u'Sensor data: {} Timestamp: {}'.format(data, timestamp)
 
-    message_future = publisher.publish(topic_path, data=payload)
+    message_future = publisher.publish(topic_path, data=data, timestamp=timestamp)
     message_future.add_done_callback(callback)
 
     time.sleep(3)
