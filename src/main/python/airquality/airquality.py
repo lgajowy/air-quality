@@ -2,11 +2,16 @@ import argparse
 import logging
 
 import apache_beam as beam
-import apache_beam.transforms.window as window
+from apache_beam import ExternalTransform
+from apache_beam.coders import BytesCoder
+from apache_beam.coders.coders import LengthPrefixCoder
+from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.portability.api.external_transforms_pb2 import ConfigValue
+from apache_beam.portability.api.external_transforms_pb2 import ExternalConfigurationPayload
 from apache_beam.transforms.trigger import AccumulationMode
 from apache_beam.transforms.trigger import AfterProcessingTime
 from apache_beam.transforms.trigger import AfterWatermark
-from apache_beam.options.pipeline_options import PipelineOptions
+import apache_beam.transforms.window as window
 
 
 class ParseEventsFn(beam.DoFn):
@@ -42,6 +47,14 @@ class PrintValuesFn(beam.DoFn):
     yield element
 
 
+def _encode_str(str_obj):
+  encoded_str = str_obj.encode('utf-8')
+  coder = LengthPrefixCoder(BytesCoder())
+  return ConfigValue(
+    coder_urn='beam:coder:string_utf8:v1',
+    payload=coder.encode(encoded_str))
+
+
 def run(argv=None):
   parser = argparse.ArgumentParser()
   opts, pipeline_args = parser.parse_known_args(argv)
@@ -56,8 +69,21 @@ def run(argv=None):
   #   subscription='projects/chromatic-idea-229612/subscriptions/beam-subscription',
   #   timestamp_attribute='timestamp')
 
-  (pipeline | 'Read from Text' >> beam.io.ReadFromText(
-    '/Users/lukasz/Projects/air-quality/air_quality.txt')
+  # (pipeline | 'Read from Text' >> beam.io.ReadFromText(
+  #   '/Users/lukasz/Projects/air-quality/air_quality.txt')
+
+  args = {
+    'subscription': _encode_str('projects/chromatic-idea-229612/subscriptions/beam-subscription'),
+  }
+  payload = ExternalConfigurationPayload(configuration=args)
+
+  (pipeline | 'Read from PubSub' >> ExternalTransform(
+    endpoint='localhost:8097',
+    urn='beam:external:java:pubsub:read:v1',
+    payload=payload.SerializeToString()
+  )
+
+   # '/Users/lukasz/Projects/air-quality/air_quality.txt'
    | 'Decode String' >> beam.Map(lambda b: b.decode('utf-8'))
    | 'Parse Events' >> beam.ParDo(ParseEventsFn())
    # | 'Window' >> beam.WindowInto(windowfn=window.FixedWindows(10),
