@@ -4,35 +4,36 @@
 # Please run " gcloud auth application-default login" first to have access to your PubSub resources
 # or use a dedicated Service Account.
 
-import time, random
-
+import time, random, sys
+from datetime import datetime
 from google.cloud import pubsub_v1
 
-project_id = "chromatic-idea-229612"
-topic_name = "air-quality"
+project_id = str(sys.argv[1])
+topic_name = str(sys.argv[2])
+
+print project_id
+print topic_name
 
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(project_id, topic_name)
 
-cities = ["WARSAW"]
-
+cities = ["WARSAW", "KRAKOW", "GDANSK", "LUBLIN"]
 
 def callback(message_future):
-    # When timeout is unspecified, the exception method waits indefinitely.
-    if message_future.exception(timeout=30):
-        print('Publishing message on {} threw an Exception {}.'.format(
-            topic_name, message_future.exception()))
-    else:
-        print(message_future.result())
+  if message_future.exception(timeout=30):
+    print('Publishing message on {} threw an Exception {}.'.format(
+      topic_name, message_future.exception()))
+
 
 while True:
-    # Message payload format: <city>,<pm25level>
-    data = u'{},{}'.format(random.choice(cities), random.randint(0, 200)).encode('utf-8')
-    timestamp = str(int(time.time() * 1000))
+  city = random.choice(cities)
+  level = random.randint(0, 100)
+  timestamp = int(time.time())
 
-    print u'Sensor data: {} Timestamp: {}'.format(data, timestamp)
+  print u'{:>9} | {:>5} | {}'.format(city, level,
+                                     datetime.fromtimestamp(timestamp).strftime('%H:%M:%S'))
 
-    message_future = publisher.publish(topic_path, data=data, timestamp=timestamp)
-    message_future.add_done_callback(callback)
-
-    time.sleep(3)
+  # Message payload format: <city>,<pm25level>
+  payload = u'{},{}'.format(city, level).encode('utf-8')
+  message_future = publisher.publish(topic_path, data=payload, timestamp=str(timestamp * 1000))
+  message_future.add_done_callback(callback)
