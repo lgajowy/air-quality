@@ -1,20 +1,21 @@
 package com.lgajowy.airquality;
 
+import static org.joda.time.Duration.*;
+import static org.joda.time.Duration.standardSeconds;
+
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.options.PipelineOptions;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.Mean;
 import org.apache.beam.sdk.transforms.ParDo;
-import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.transforms.windowing.AfterProcessingTime;
 import org.apache.beam.sdk.transforms.windowing.AfterWatermark;
+import org.apache.beam.sdk.transforms.windowing.BoundedWindow;
 import org.apache.beam.sdk.transforms.windowing.FixedWindows;
 import org.apache.beam.sdk.transforms.windowing.Window;
 import org.apache.beam.sdk.values.KV;
-import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,44 +23,57 @@ public class AvgAirQuality {
 
   private static Logger LOG = LoggerFactory.getLogger(AvgAirQuality.class);
 
-  public static void main(String[] args) {
-    PipelineOptions options = PipelineOptionsFactory.fromArgs(args).as(PipelineOptions.class);
+  public interface Options extends PipelineOptions {
 
+    String getTopic();
+
+    void setTopic(String topic);
+
+  }
+
+  public static void main(String[] args) {
+    Options options = PipelineOptionsFactory.fromArgs(args).as(Options.class);
     Pipeline pipeline = Pipeline.create(options);
 
-    System.out.println(options.toString());
-
-    pipeline.apply("Read", PubsubIO.readStrings()
+    pipeline.apply("Read events", PubsubIO.readStrings()
         .withTimestampAttribute("timestamp")
-        .fromSubscription("projects/chromatic-idea-229612/subscriptions/beam-subscription"))
-        .apply("Parse", ParDo.of(new ParseEvents()))
-        .apply("Window", Window.<KV<String, Integer>>into(FixedWindows.of(Duration.standardSeconds(10)))
+        .fromTopic(options.getTopic()))
+        .apply("Parse content", ParDo.of(new ParseEvents()))
+        .apply("Window", Window.<KV<String, Integer>>into(FixedWindows.of(standardSeconds(10)))
             .triggering(AfterWatermark.pastEndOfWindow()
-            .withEarlyFirings(AfterProcessingTime.pastFirstElementInPane()
-                    .plusDelayOf(Duration.standardSeconds(5))))
-            .withAllowedLateness(Duration.ZERO)
+                .withEarlyFirings(AfterProcessingTime
+                    .pastFirstElementInPane()
+                    .plusDelayOf(standardSeconds(5))))
+            .withAllowedLateness(ZERO)
             .accumulatingFiredPanes())
-        .apply("Combine", Mean.perKey())
-        .apply("Print mean value per city", MapElements.via(new SimpleFunction<KV<String, Double>, KV<String, Double>>() {
-          @Override
-          public KV<String, Double> apply(KV<String, Double> input) {
-            LOG.info(String.format("City: %s, mean value: %s", input.getKey(), input.getValue()));
-            System.out.println(String.format("City: %s, mean value: %s", input.getKey(), input.getValue()));
-            return input;
-          }
-        }));
+        .apply("Mean for each city", Mean.perKey())
+        .apply("Print results", ParDo.of(new PrintResults()));
 
     pipeline.run().waitUntilFinish();
   }
 
+  private static class PrintResults extends DoFn<KV<String, Double>, KV<String, Double>> {
+
+    @ProcessElement
+    public void processElement(ProcessContext c, BoundedWindow window) {
+      KV<String, Double> result = c.element();
+
+      String message = String
+          .format("%9s | %5s | %s", result.getKey(), result.getValue().intValue(),
+              window.maxTimestamp().toDateTime().toString("HH:mm:ss"));
+
+      System.out.println(message);
+      LOG.info(message);
+
+      c.output(c.element());
+    }
+  }
+
   private static class ParseEvents extends DoFn<String, KV<String, Integer>> {
+
     @ProcessElement
     public void processElement(ProcessContext c) {
       String eventData = c.element();
-      LOG.info(eventData);
-      System.out.println(eventData);
-      System.out.println(c.timestamp());
-
       try {
         String[] splitData = eventData.split(",");
         String city = splitData[0].trim();
